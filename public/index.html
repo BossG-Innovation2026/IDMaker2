@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 CSHS ID - Data Collection Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .page { display: none !important; }
+        .landing-page.page.active { display: flex !important; }
+        .container.page.active { display: block !important; }
+        .bulk-page.page.active { display: flex !important; }
+    </style>
+</head>
+<body>
+    <!-- PAGE 1: Welcome -->
+    <div id="landingPage" class="landing-page page active">
+        <div class="landing-card">
+            <h1>2026 CSHS ID</h1>
+            <h2>Welcome to the Student Information & School ID Registration System.</h2>
+            <p>This system helps the school collect, verify, and process student information and photos for accurate and efficient School ID generation and records management.</p>
+
+            <div class="landing-section">
+                <h3>Data Privacy</h3>
+                <p>Your information and photo will be collected and processed only for legitimate school purposes, including student identification and records management.</p>
+            </div>
+
+            <div class="landing-section">
+                <h3>Before You Proceed</h3>
+                <ul>
+                    <li>Enter information truthfully, accurately, and completely.</li>
+                    <li>Use your official name and LRN.</li>
+                    <li>Upload a clear photo with a plain white background.</li>
+                    <li>Review your information before submitting.</li>
+                </ul>
+            </div>
+
+            <p class="landing-agreement">By clicking Proceed, you confirm that you have read and understood these guidelines and agree to the processing of your information for legitimate school purposes.</p>
+
+            <button class="btn-proceed" id="proceedBtn">PROCEED</button>
+        </div>
+    </div>
+
+    <!-- PAGE 2: LRN Entry -->
+    <div id="lrnPage" class="landing-page page">
+        <div class="landing-card">
+            <h1>2026 CSHS ID</h1>
+            <h2>Enter Your Learner Reference Number</h2>
+            <p>Please enter your 12-digit LRN to proceed. This will be used to verify your identity and link your records.</p>
+
+            <div class="lrn-input-group">
+                <input type="text" id="lrnVerify" class="lrn-input" maxlength="12" placeholder="e.g. 123456789012" autocomplete="off">
+                <span id="lrnError" class="lrn-error" style="display:none">LRN must be exactly 12 digits</span>
+            </div>
+
+            <div class="lrn-actions">
+                <button class="btn-back" id="lrnBackBtn">Back</button>
+                <button class="btn-proceed" id="lrnContinueBtn">Continue</button>
+            </div>
+
+            <!-- Gear Icon — Bulk Entry Shortcut -->
+            <button id="gearBtn" class="gear-btn" title="Bulk Entry (Admin)">⚙</button>
+        </div>
+    </div>
+
+    <!-- PAGE 3: Main Data Entry Form -->
+    <div id="mainForm" class="container page">
+        <div class="card">
+            <div class="header">
+                <h1>2026 CSHS ID</h1>
+                <p>Data Collection Portal</p>
+            </div>
+
+            <form id="studentForm">
+                <!-- Photo Section -->
+                <div class="photo-section">
+                    <div class="photo-preview" id="photoPreview">
+                        <span class="placeholder">📷</span>
+                    </div>
+                    <button type="button" class="btn-neu btn-secondary" onclick="openCameraModal()">
+                        📷 Take Photo
+                    </button>
+                    <button type="button" class="btn-neu btn-secondary" onclick="document.getElementById('cameraInput').click()">
+                        📂 Upload from Gallery
+                    </button>
+                    <div id="photoValidation" class="photo-validation hidden"></div>
+                </div>
+
+                <!-- Class Selection -->
+                <div class="form-group">
+                    <label>Class *</label>
+                    <select id="classSelect" name="section" required>
+                        <option value="">Select Class</option>
+                    </select>
+                </div>
+
+                <!-- Name Fields -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>First Name *</label>
+                        <input type="text" id="firstName" name="firstName" placeholder="First Name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Middle Name</label>
+                        <input type="text" id="middleName" name="middleName" placeholder="Middle Name">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Last Name *</label>
+                    <input type="text" id="lastName" name="lastName" placeholder="Last Name" required>
+                </div>
+
+                <!-- Auto-generated Full Name -->
+                <div class="form-group">
+                    <label>Full Name (Auto-generated)</label>
+                    <input type="text" id="fullName" readonly class="auto-address" placeholder="SURNAME, FIRSTNAME M.I.">
+                </div>
+
+                <!-- Other Fields -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Sex *</label>
+                        <select id="sex" name="sex" required>
+                            <option value="">Select Sex</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Birthday *</label>
+                        <input type="date" id="birthday" name="birthday" min="2000-01-01" max="2013-12-31" required>
+                        <div id="birthdayDisplay" class="date-display"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>LRN * (12 digits)</label>
+                    <input type="text" id="lrn" name="lrn" placeholder="12-digit LRN" maxlength="12" pattern="\d{12}" required>
+                    <div id="lrnValidation" class="field-validation hidden"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Town *</label>
+                    <select id="town" name="town" required>
+                        <option value="">Select Town</option>
+                        <option value="Cabiao">Cabiao</option>
+                        <option value="San Isidro">San Isidro</option>
+                        <option value="San Antonio">San Antonio</option>
+                        <option value="Arayat">Arayat</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Barangay *</label>
+                    <select id="barangay" name="barangay" required disabled>
+                        <option value="">Select Town first</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Specific Location *</label>
+                    <input type="text" id="specificLocation" name="specificLocation" placeholder="Purok, Street, Sitio, or Subdivision" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Full Address (Auto-generated)</label>
+                    <input type="text" id="address" name="address" readonly class="auto-address">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Parent/Guardian *</label>
+                        <input type="text" id="parentName" name="parentName" placeholder="Parent/Guardian Name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Contact *</label>
+                        <input type="tel" id="contactNumber" name="contactNumber" placeholder="Contact Number" required>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <button type="submit" class="btn-neu btn-primary">
+                    Generate ID
+                </button>
+
+                <div id="downloadSection" class="download-section hidden">
+                    <button type="button" class="btn-neu btn-download" onclick="downloadReceipt()">
+                        📥 Download Receipt
+                    </button>
+                    <p class="drive-note" id="driveNote">Photo & ID will be saved to Google Drive</p>
+                </div>
+            </form>
+
+            <!-- Status Message -->
+            <div id="status" class="status hidden"></div>
+
+            <!-- Queue Status Bar -->
+            <div id="queueBar" class="queue-bar hidden">
+                <div class="queue-bar-content">
+                    <div class="queue-spinner"></div>
+                    <span id="queueBarText">Processing...</span>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loadingOverlay" class="loading-overlay hidden">
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <p id="loadingText" class="loading-text">Processing...</p>
+                    <p id="loadingSubtext" class="loading-subtext">Please wait</p>
+                </div>
+            </div>
+
+            <!-- ID Preview -->
+            <div id="idPreview" class="id-preview hidden">
+                <h3>ID Preview</h3>
+                <div class="id-card">
+                    <div class="id-card-header">
+                        <h2>CABIAO SENIOR HIGH SCHOOL</h2>
+                        <p>TEMPORARY ID</p>
+                    </div>
+                    <div class="id-card-body">
+                        <div class="id-card-photo" id="idPhoto">
+                            <span class="placeholder">No Photo</span>
+                        </div>
+                        <div class="id-card-info">
+                            <p><strong>Name:</strong> <span id="idName">-</span></p>
+                            <p><strong>Sex:</strong> <span id="idSex">-</span></p>
+                            <p><strong>Class:</strong> <span id="idClass">-</span></p>
+                            <p><strong>LRN:</strong> <span id="idLRN">-</span></p>
+                            <p><strong>Birthday:</strong> <span id="idBirthday">-</span></p>
+                        </div>
+                    </div>
+                    <div class="id-card-footer">
+                        <p><strong>Address:</strong> <span id="idAddress">-</span></p>
+                        <p><strong>Parent/Guardian:</strong> <span id="idParent">-</span></p>
+                        <p><strong>Contact:</strong> <span id="idContact">-</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera Modal -->
+    <div id="cameraModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📷 Take Photo</h2>
+                <button type="button" class="close-btn" onclick="closeCameraModal()">✕</button>
+            </div>
+            <div class="camera-container">
+                <video id="cameraPreview" autoplay playsinline></video>
+                <canvas id="faceCanvas"></canvas>
+                <div class="face-guide" id="faceGuide">
+                    <div class="guide-oval" id="guideOval"></div>
+                </div>
+                <div class="face-status" id="faceStatus">
+                    <span class="status-icon">🔍</span>
+                    <span class="status-text">Searching for face...</span>
+                </div>
+            </div>
+            <div class="camera-controls">
+                <div class="face-checks" id="faceChecks">
+                    <div class="check-item" id="checkFace">
+                        <span class="check-icon">○</span>
+                        <span>Face Detected</span>
+                    </div>
+                    <div class="check-item" id="checkCenter">
+                        <span class="check-icon">○</span>
+                        <span>Centered</span>
+                    </div>
+                    <div class="check-item" id="checkSize">
+                        <span class="check-icon">○</span>
+                        <span>Good Size</span>
+                    </div>
+                    <div class="check-item" id="checkBg">
+                        <span class="check-icon">○</span>
+                        <span>White Background</span>
+                    </div>
+                </div>
+                <button type="button" class="btn-neu btn-capture" id="captureBtn" onclick="capturePhoto()">
+                    📸 Capture Photo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Preview Modal -->
+    <div id="previewModal" class="modal hidden">
+        <div class="modal-content preview-content">
+            <div class="modal-header">
+                <h2>📷 Photo Preview</h2>
+                <button type="button" class="close-btn" onclick="rejectPhoto()">✕</button>
+            </div>
+            <div class="preview-container">
+                <div class="preview-photo" id="previewPhoto">
+                    <img id="capturedPhoto" src="" alt="Captured">
+                </div>
+            </div>
+            <div id="bgNote" class="photo-validation hidden" style="margin: 0 20px;"></div>
+            <div class="preview-actions">
+                <button type="button" class="btn-neu btn-reject" onclick="rejectPhoto()">
+                    ✕ Retake
+                </button>
+                <button type="button" class="btn-neu btn-approve" id="approveBtn" onclick="approvePhoto()">
+                    ✓ Use Photo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Warning Modal -->
+    <div id="duplicateModal" class="modal hidden">
+        <div class="modal-content dup-content">
+            <div class="modal-header dup-header">
+                <h2>⚠ DUPLICATE RECORD DETECTED</h2>
+            </div>
+            <div class="dup-body">
+                <div class="dup-section">
+                    <div class="dup-label">New Record</div>
+                    <div class="dup-detail"><strong>Surname:</strong> <span id="dupNewLast"></span></div>
+                    <div class="dup-detail"><strong>First Name:</strong> <span id="dupNewFirst"></span></div>
+                    <div class="dup-detail"><strong>LRN:</strong> <span id="dupNewLRN"></span></div>
+                </div>
+                <div class="dup-section">
+                    <div class="dup-label">Existing Record</div>
+                    <div class="dup-detail"><strong>Surname:</strong> <span id="dupOldLast"></span></div>
+                    <div class="dup-detail"><strong>First Name:</strong> <span id="dupOldFirst"></span></div>
+                    <div class="dup-detail"><strong>LRN:</strong> <span id="dupOldLRN"></span></div>
+                    <div class="dup-detail"><strong>Section:</strong> <span id="dupOldSection"></span></div>
+                </div>
+                <div class="dup-section dup-match">
+                    <div class="dup-label">Matched By</div>
+                    <div class="dup-detail" id="dupMatchName" style="display:none">☑ Surname + First Name</div>
+                    <div class="dup-detail" id="dupMatchLRN" style="display:none">☑ LRN</div>
+                </div>
+                <div class="dup-warning">
+                    ⚠ Overriding will delete the existing student's associated image, DOCX, Excel/Sheet record, and other student-specific files before creating the new record.
+                </div>
+            </div>
+            <div class="dup-actions">
+                <button type="button" class="btn-neu btn-secondary" onclick="cancelOverride()">CANCEL</button>
+                <button type="button" class="btn-neu btn-danger" onclick="confirmOverride()">OVERRIDE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Rejection Modal -->
+    <div id="rejectModal" class="modal hidden">
+        <div class="modal-content reject-content">
+            <div class="modal-header reject-header">
+                <h2>✕ Background Check Failed</h2>
+            </div>
+            <div class="reject-body">
+                <div class="reject-icon">⚠</div>
+                <p>The uploaded image does not have a sufficiently white background.</p>
+                <div class="reject-stats">
+                    <div class="reject-stat">
+                        <span class="stat-label">Detected</span>
+                        <span class="stat-value" id="rejectDetected">—</span>
+                    </div>
+                    <div class="reject-stat">
+                        <span class="stat-label">Required</span>
+                        <span class="stat-value">80%</span>
+                    </div>
+                </div>
+                <p class="reject-hint">Please upload another image with a plain white background.</p>
+            </div>
+            <div class="reject-actions">
+                <button type="button" class="btn-neu btn-approve" onclick="closeRejectModal()">
+                    OK, I'll try again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Preview Modal -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-content confirm-content">
+            <div class="modal-header">
+                <h2>✓ Review Student Details</h2>
+                <button type="button" class="close-btn" onclick="closeConfirmModal()">✕</button>
+            </div>
+            <div class="confirm-body">
+                <div class="confirm-photo">
+                    <img id="confirmPhoto" src="" alt="Student Photo">
+                </div>
+                <div class="confirm-details">
+                    <h3>Personal Information</h3>
+                    <div class="detail-row">
+                        <strong>Name:</strong>
+                        <span id="confirmName"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Section:</strong>
+                        <span id="confirmSection"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>LRN:</strong>
+                        <span id="confirmLRN"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Birthday:</strong>
+                        <span id="confirmBirthday"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Sex:</strong>
+                        <span id="confirmSex"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Address:</strong>
+                        <span id="confirmAddress"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Parent/Guardian:</strong>
+                        <span id="confirmParent"></span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Contact:</strong>
+                        <span id="confirmContact"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="confirm-actions">
+                <button type="button" class="btn-neu btn-secondary" onclick="closeConfirmModal()">
+                    ← Edit Details
+                </button>
+                <button type="button" class="btn-neu btn-primary" onclick="confirmAndGenerate()">
+                    ✓ Generate ID Card
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="cameraInput" name="photo" accept="image/*" hidden>
+
+    <!-- Passcode Modal -->
+    <div id="passcodeModal" class="modal hidden">
+        <div class="modal-content passcode-content">
+            <div class="modal-header">
+                <h2>🔒 Admin Access</h2>
+                <button type="button" class="close-btn" onclick="closePasscodeModal()">✕</button>
+            </div>
+            <div class="passcode-body">
+                <p>Enter passcode to access Bulk Entry</p>
+                <input type="password" id="passcodeInput" class="passcode-input" placeholder="Enter passcode" autocomplete="off">
+                <div id="passcodeError" class="passcode-error hidden">Invalid passcode. Try again.</div>
+            </div>
+            <div class="passcode-actions">
+                <button type="button" class="btn-neu btn-secondary" onclick="closePasscodeModal()">Cancel</button>
+                <button type="button" class="btn-neu btn-primary" id="passcodeSubmitBtn" onclick="submitPasscode()">Enter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Entry Page -->
+    <div id="bulkPage" class="landing-page bulk-page page">
+        <div class="landing-card" style="max-width:600px;width:100%;">
+            <h1>2026 CSHS ID</h1>
+            <h2>Bulk Entry</h2>
+            <p>Upload an Excel file with student data. Photos should be Google Drive share links.</p>
+
+            <div class="bulk-columns-info">
+                <strong>Required columns:</strong>
+                <code>LRN | Last Name | First Name | Middle Name | Sex | Section | Birthday | Address | Parent/Guardian | Contact | Photo Link</code>
+                <br><small>Output columns (ID Card Link, Status, Created, Updated, Entry Method, Overridden) are ignored during upload.</small>
+            </div>
+
+            <!-- Excel Drop Zone -->
+            <div class="bulk-dropzone" id="bulkDropzone">
+                <div class="dropzone-icon">📄</div>
+                <div class="dropzone-text">Drag & drop Excel file here</div>
+                <div class="dropzone-sub">or</div>
+                <label class="btn-neu btn-secondary dropzone-btn">
+                    Choose File
+                    <input type="file" id="bulkFileInput" accept=".xlsx,.xls,.csv" hidden>
+                </label>
+            </div>
+
+            <div id="bulkFileInfo" class="bulk-file-info hidden"></div>
+
+            <!-- Preview Table -->
+            <div id="bulkPreview" class="bulk-preview hidden">
+                <h3>Preview (<span id="bulkRowCount">0</span> students)</h3>
+                <div class="bulk-table-wrap">
+                    <table class="bulk-table" id="bulkPreviewTable">
+                        <thead><tr id="bulkPreviewHead"></tr></thead>
+                        <tbody id="bulkPreviewBody"></tbody>
+                    </table>
+                </div>
+                <div class="bulk-actions">
+                    <button type="button" class="btn-neu btn-secondary" onclick="resetBulk()">← Cancel</button>
+                    <button type="button" class="btn-neu btn-primary" id="bulkStartBtn" onclick="startBulkUpload()">🚀 Process All</button>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="bulkProgress" class="bulk-progress hidden">
+                <h3>Processing...</h3>
+                <div class="progress-bar-outer">
+                    <div class="progress-bar-inner" id="bulkProgressBar" style="width:0%"></div>
+                </div>
+                <div class="progress-stats">
+                    <span id="bulkProgressText">0 / 0</span>
+                    <span id="bulkProgressPercent">0%</span>
+                </div>
+                <div class="progress-counts">
+                    <span class="count-success">✓ <span id="bulkSuccessCount">0</span> success</span>
+                    <span class="count-fail">✕ <span id="bulkFailCount">0</span> failed</span>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="bulkResults" class="bulk-results hidden">
+                <h3>Results</h3>
+                <div class="bulk-table-wrap">
+                    <table class="bulk-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Section</th>
+                                <th>Status</th>
+                                <th>Error</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bulkResultsBody"></tbody>
+                    </table>
+                </div>
+                <div class="bulk-actions">
+                    <button type="button" class="btn-neu btn-primary" onclick="resetBulk()">✓ Done</button>
+                </div>
+            </div>
+
+            <button type="button" class="btn-back" style="margin-top:15px" onclick="showPage('landingPage')">← Back to Home</button>
+        </div>
+    </div>
+
+    <!-- Page Navigation Script — runs FIRST, before anything else -->
+    <script>
+    (function() {
+        var pages = ['landingPage', 'lrnPage', 'mainForm', 'bulkPage'];
+        function showPage(id) {
+            pages.forEach(function(p) {
+                var el = document.getElementById(p);
+                if (el) { el.classList.remove('active'); el.classList.add('page'); }
+            });
+            var target = document.getElementById(id);
+            if (target) { target.classList.add('active'); target.classList.remove('page'); }
+        }
+        window.showPage = showPage;
+        // Start on landing page
+        showPage('landingPage');
+
+        document.getElementById('proceedBtn').addEventListener('click', function() {
+            showPage('lrnPage');
+            document.getElementById('lrnVerify').focus();
+        });
+
+        document.getElementById('lrnBackBtn').addEventListener('click', function() {
+            showPage('landingPage');
+        });
+
+        document.getElementById('lrnContinueBtn').addEventListener('click', function() {
+            var v = document.getElementById('lrnVerify').value.trim();
+            if (!/^\d{12}$/.test(v)) {
+                document.getElementById('lrnError').style.display = 'block';
+                return;
+            }
+            document.getElementById('lrn').value = v;
+            showPage('mainForm');
+        });
+
+        document.getElementById('lrnVerify').addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+            document.getElementById('lrnError').style.display = 'none';
+        });
+        document.getElementById('lrnVerify').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('lrnContinueBtn').click();
+        });
+
+        // Gear button → open passcode modal
+        document.getElementById('gearBtn').addEventListener('click', function() {
+            document.getElementById('passcodeModal').classList.remove('hidden');
+            document.getElementById('passcodeInput').value = '';
+            document.getElementById('passcodeError').classList.add('hidden');
+            document.getElementById('passcodeInput').focus();
+        });
+    })();
+    </script>
+
+    <!-- External libs -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js?v=102"></script>
+    <script src="bulk.js?v=100"></script>
+</body>
+</html>

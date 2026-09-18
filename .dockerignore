@@ -1,0 +1,7 @@
+node_modules
+.env
+credentials.json
+uploads/*.pdf
+uploads/*.docx
+uploads/*.jpg
+uploads/*.tmp_*
