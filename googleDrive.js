@@ -418,8 +418,8 @@ class GoogleDriveService {
 
         try {
             const store = require('./store');
-            const allStudents = store.all();
-            const allOverrides = store.allOverrides();
+            const allStudents = await store.all();
+            const allOverrides = await store.allOverrides();
 
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('All Students');

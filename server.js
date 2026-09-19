@@ -6,6 +6,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const { connectDB } = require('./db');
 const googleDrive = require('./googleDrive');
 const store = require('./store');
 const uploadQueue = require('./uploadQueue');
@@ -113,6 +114,7 @@ app.get('/api/queue-stats', (req, res) => {
 function present(student) {
   return {
     ...student,
+    id: student._id,
     photoUrl: `/uploads/${student.photoPath}`
   };
 }
@@ -133,13 +135,13 @@ app.get('/api/drive-status', async (req, res) => {
 });
 
 // Check for duplicate student (LRN + surname + first name)
-app.get('/api/students/check-duplicate', (req, res) => {
+app.get('/api/students/check-duplicate', async (req, res) => {
   const { firstName, lastName, lrn } = req.query;
   if (!firstName && !lastName && !lrn) {
     return res.json({ isDuplicate: false });
   }
 
-  const result = store.checkDuplicate(firstName, lastName, lrn);
+  const result = await store.checkDuplicate(firstName, lastName, lrn);
   res.json(result);
 });
 
@@ -163,14 +165,13 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
     }
 
     // STEP 1: Locate existing record
-    const existing = store.find(existingId);
+    const existing = await store.find(existingId);
     if (!existing) {
       return res.status(404).json({ error: 'Existing student record not found' });
     }
 
     // STEP 2: Create NEW student record FIRST (before deleting old)
     const student = {
-      id: uuidv4(),
       firstName, middleName: middleName || '', lastName, sex, birthday,
       lrn, section, address, parentName, contactNumber,
       entryMethod: 'Individual',
@@ -180,26 +181,26 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
       uploadError: null,
       driveUploaded: false,
       driveLink: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      idCardDocxPath: null
     };
 
     // Save new student to store
-    store.add(student);
+    const savedStudent = await store.add(student);
+    const studentId = String(savedStudent._id);
 
     // Enqueue DOCX generation (max 3 concurrent, returns position)
     const photoBuf = fs.readFileSync(path.join(__dirname, 'uploads', student.photoPath));
-    const { queueId, position, promise } = docxQueue.enqueueDOCX(student, photoBuf);
+    const { queueId, position, promise } = docxQueue.enqueueDOCX({ ...student, id: studentId }, photoBuf);
 
     // Background: wait for DOCX, then enqueue Drive upload
     promise.then(result => {
       if (result && result.docxPath) {
-        store.update(student.id, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+        store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
       }
-      uploadQueue.enqueue(student.id, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
+      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
     }).catch(err => {
       console.error('[OVERRIDE] DOCX generation failed:', err.message);
-      store.update(student.id, { uploadStatus: 'failed', uploadError: err.message });
+      store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
     });
 
     // STEP 3: Delete old files and record
@@ -224,11 +225,11 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
     if (existing.idCardDocxPath) deleteFile(existing.idCardDocxPath, 'DOCX');
 
     // Log the old record as overridden BEFORE removing it
-    store.logOverride({ ...existing, overriddenAt: new Date().toISOString() });
+    await store.logOverride({ ...existing, _id: undefined, overriddenAt: new Date() });
 
     // Remove old record from store
-    store.remove(existing.id);
-    console.log(`[OVERRIDE] Replaced ${existing.id} (${existing.firstName} ${existing.lastName}) → ${student.id} — files removed: ${filesDeleted.join(', ') || 'none'}`);
+    await store.remove(existing._id);
+    console.log(`[OVERRIDE] Replaced ${existing._id} (${existing.firstName} ${existing.lastName}) → ${studentId} — files removed: ${filesDeleted.join(', ') || 'none'}`);
 
     // Delete old Google Drive files (non-blocking)
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID || '0ACktHqI8zSSCUk9PVA';
@@ -239,7 +240,7 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
     res.status(202).json({
       success: true,
       message: 'Override complete. New student record created.',
-      student: present(student),
+      student: present({ ...savedStudent, _id: studentId }),
       queue: { queueId, position },
       override: {
         deletedId: existingId,
@@ -280,7 +281,7 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
     }
 
     // Backend duplicate check — authoritative
-    const dupCheck = store.checkDuplicate(firstName, lastName, lrn);
+    const dupCheck = await store.checkDuplicate(firstName, lastName, lrn);
     if (dupCheck.isDuplicate) {
       return res.status(409).json({
         error: 'DUPLICATE',
@@ -303,7 +304,6 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
     }
 
     const student = {
-      id: uuidv4(),
       firstName,
       middleName: middleName || '',
       lastName,
@@ -321,32 +321,32 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
       uploadError: null,
       driveUploaded: false,
       driveLink: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      idCardDocxPath: null
     };
 
-    store.add(student);
+    const savedStudent = await store.add(student);
+    const studentId = String(savedStudent._id);
 
     // Enqueue DOCX generation (max 3 concurrent, returns position)
     const photoBuf = fs.readFileSync(path.join(__dirname, 'uploads', student.photoPath));
-    const { queueId, position, promise } = docxQueue.enqueueDOCX(student, photoBuf);
+    const { queueId, position, promise } = docxQueue.enqueueDOCX({ ...student, id: studentId }, photoBuf);
 
     // Background: wait for DOCX, then enqueue Drive upload
     promise.then(result => {
       if (result && result.docxPath) {
-        store.update(student.id, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+        store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
       }
-      uploadQueue.enqueue(student.id, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
+      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
     }).catch(err => {
       console.error('DOCX generation failed:', err.message);
-      store.update(student.id, { uploadStatus: 'failed', uploadError: err.message });
+      store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
     });
 
     // Respond immediately with queue position
     res.status(202).json({
       success: true,
       message: 'Student saved. ID card is being generated.',
-      student: present(student),
+      student: present({ ...savedStudent, _id: studentId }),
       queue: { queueId, position }
     });
   } catch (error) {
@@ -376,7 +376,7 @@ app.post('/api/bulk-students', rateLimiter, async (req, res) => {
     }
 
     // Backend duplicate check
-    const dupCheck = store.checkDuplicate(firstName, lastName, lrn);
+    const dupCheck = await store.checkDuplicate(firstName, lastName, lrn);
     if (dupCheck.isDuplicate) {
       return res.status(409).json({
         error: 'DUPLICATE',
@@ -427,7 +427,6 @@ app.post('/api/bulk-students', rateLimiter, async (req, res) => {
     fs.writeFileSync(photoPath, photoBuffer);
 
     const student = {
-      id: uuidv4(),
       firstName,
       middleName: middleName || '',
       lastName,
@@ -446,29 +445,29 @@ app.post('/api/bulk-students', rateLimiter, async (req, res) => {
       uploadError: null,
       driveUploaded: false,
       driveLink: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      idCardDocxPath: null
     };
 
-    store.add(student);
+    const savedStudent = await store.add(student);
+    const studentId = String(savedStudent._id);
 
     // Enqueue DOCX generation (processed buffer already cropped/square)
-    const { queueId, position, promise } = docxQueue.enqueueDOCX(student, photoBuffer);
+    const { queueId, position, promise } = docxQueue.enqueueDOCX({ ...student, id: studentId }, photoBuffer);
 
     // Background: wait for DOCX, then enqueue Drive upload
     promise.then(result => {
       if (result && result.docxPath) {
-        store.update(student.id, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+        store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
       }
-      uploadQueue.enqueue(student.id, { photo: photoBuffer, photoExt: ext });
+      uploadQueue.enqueue(studentId, { photo: photoBuffer, photoExt: ext });
     }).catch(err => {
       console.error('[BULK] DOCX generation failed:', err.message);
-      store.update(student.id, { uploadStatus: 'failed', uploadError: err.message });
+      store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
     });
 
     res.status(202).json({
       success: true,
-      student: present(student),
+      student: present({ ...savedStudent, _id: studentId }),
       queue: { queueId, position }
     });
   } catch (error) {
@@ -478,18 +477,19 @@ app.post('/api/bulk-students', rateLimiter, async (req, res) => {
 });
 
 // Get all students
-app.get('/api/students', (req, res) => {
-  res.json(store.all().map(present));
+app.get('/api/students', async (req, res) => {
+  const students = await store.all();
+  res.json(students.map(present));
 });
 
 // Get one student's upload status
-app.get('/api/students/:id/status', (req, res) => {
-  const student = store.find(req.params.id);
+app.get('/api/students/:id/status', async (req, res) => {
+  const student = await store.find(req.params.id);
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
   }
   res.json({
-    id: student.id,
+    id: student._id,
     uploadStatus: student.uploadStatus,
     uploadError: student.uploadError,
     driveUploaded: !!student.driveUploaded,
@@ -500,8 +500,8 @@ app.get('/api/students/:id/status', (req, res) => {
 });
 
 // Delete a student
-app.delete('/api/students/:id', (req, res) => {
-  const student = store.find(req.params.id);
+app.delete('/api/students/:id', async (req, res) => {
+  const student = await store.find(req.params.id);
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
   }
@@ -520,19 +520,19 @@ app.delete('/api/students/:id', (req, res) => {
     console.warn('Error cleaning up files:', e.message);
   }
   
-  store.remove(student.id);
+  await store.remove(student._id);
   res.json({ success: true, message: 'Student deleted' });
 });
 
 // Re-queue a failed/pending upload
-app.post('/api/students/:id/resync', (req, res) => {
-  const student = store.find(req.params.id);
+app.post('/api/students/:id/resync', async (req, res) => {
+  const student = await store.find(req.params.id);
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
   }
-  store.update(student.id, { uploadStatus: 'pending', uploadError: null });
-  uploadQueue.enqueue(student.id);
-  res.json({ success: true, message: 'Re-queued for upload', id: student.id });
+  await store.update(student._id, { uploadStatus: 'pending', uploadError: null });
+  uploadQueue.enqueue(student._id);
+  res.json({ success: true, message: 'Re-queued for upload', id: student._id });
 });
 
 // Queue stats
@@ -541,15 +541,15 @@ app.get('/api/queue', (req, res) => {
 });
 
 // Manual re-sync of a single student
-app.post('/api/save-to-drive', rateLimiter, (req, res) => {
+app.post('/api/save-to-drive', rateLimiter, async (req, res) => {
   const { studentId } = req.body;
-  const student = store.find(studentId);
+  const student = await store.find(studentId);
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
   }
-  store.update(student.id, { uploadStatus: 'pending', uploadError: null });
-  uploadQueue.enqueue(student.id);
-  res.json({ success: true, message: 'Re-queued for upload', id: student.id });
+  await store.update(student._id, { uploadStatus: 'pending', uploadError: null });
+  uploadQueue.enqueue(student._id);
+  res.json({ success: true, message: 'Re-queued for upload', id: student._id });
 });
 
 // ── Reset endpoint — clears all local + Drive data ──────────────────
@@ -558,12 +558,12 @@ app.post('/api/reset', rateLimiter, async (req, res) => {
     console.log('[RESET] Starting full data reset...');
 
     // 1. Clear local student store
-    const students = store.all();
-    store.reset();
+    const students = await store.all();
+    await store.reset();
     console.log(`[RESET] Cleared ${students.length} student records from store`);
 
     // 2. Clear overrides
-    store.resetOverrides();
+    await store.resetOverrides();
     console.log('[RESET] Cleared overrides');
 
     // 3. Delete local files in uploads/
@@ -605,21 +605,29 @@ app.post('/api/reset', rateLimiter, async (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Classes available: ${classes.length} predefined`);
-  console.log('Google Drive integration: Enabled');
+async function start() {
+  await connectDB();
+
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Classes available: ${classes.length} predefined`);
+    console.log('Google Drive integration: Enabled');
+    console.log('Database: MongoDB Atlas');
+  });
 
   // Load persisted queue from disk
   uploadQueue.loadQueue();
 
   // Recover unfinished uploads (skip already-uploaded)
-  const pending = store.all().filter(s => s.uploadStatus !== 'uploaded' && s.uploadStatus !== 'uploading');
+  const allStudents = await store.all();
+  const pending = allStudents.filter(s => s.uploadStatus !== 'uploaded' && s.uploadStatus !== 'uploading');
   if (pending.length > 0) {
     console.log(`↻ Re-queuing ${pending.length} unfinished upload(s)`);
-    pending.forEach(s => {
-      store.update(s.id, { uploadStatus: 'pending' });
-      uploadQueue.enqueue(s.id);
-    });
+    for (const s of pending) {
+      await store.update(s._id, { uploadStatus: 'pending' });
+      uploadQueue.enqueue(String(s._id));
+    }
   }
-});
+}
+
+start();

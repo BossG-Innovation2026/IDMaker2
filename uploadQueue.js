@@ -92,7 +92,7 @@ function scheduleIdleExcel() {
   idleTimer = setTimeout(async () => {
     console.log('[QUEUE] Queue idle — generating Excel files...');
     try {
-      const allStudents = store.all();
+      const allStudents = await store.all();
       // Group by section, then separate by entry method
       const sectionGroups = {};
       for (const s of allStudents) {
@@ -177,18 +177,18 @@ function buildFiles(student, prebuilt) {
 
 async function processJob(job) {
   const id = typeof job === 'string' ? job : job.id;
-  const student = store.find(id);
+  const student = await store.find(id);
   if (!student) return;
   if (student.uploadStatus === 'uploaded') return;
 
   console.log(`\n[QUEUE] Processing: ${student.lastName}_${student.firstName} (${student.section})`);
-  store.update(id, { uploadStatus: 'uploading', uploadError: null });
+  await store.update(id, { uploadStatus: 'uploading', uploadError: null });
 
   const files = buildFiles(student, job.prebuiltFiles);
   // Release buffers from job immediately after building file list
   job.prebuiltFiles = null;
   if (!files) {
-    store.update(id, { uploadStatus: 'failed', uploadError: 'Files missing on disk' });
+    await store.update(id, { uploadStatus: 'failed', uploadError: 'Files missing on disk' });
     return;
   }
 
@@ -218,7 +218,7 @@ async function processJob(job) {
         idCardDocx: results.idCardDocx?.fileLink || null
       };
 
-      store.update(id, {
+      await store.update(id, {
         uploadStatus: 'uploaded',
         uploadError: null,
         driveUploaded: true,
@@ -242,7 +242,7 @@ async function processJob(job) {
     }
   }
 
-  store.update(id, { uploadStatus: 'failed', uploadError: lastError });
+  await store.update(id, { uploadStatus: 'failed', uploadError: lastError });
 }
 
 function cleanupLocalFiles(student) {
