@@ -21,10 +21,6 @@ RUN apt-get update && \
     && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy custom fonts
-COPY fonts/ /usr/share/fonts/truetype/custom/
-RUN fc-cache -f -v
-
 WORKDIR /opt/render/project/src
 
 COPY package*.json ./
