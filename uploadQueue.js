@@ -116,10 +116,12 @@ function buildFiles(student, prebuilt) {
     });
   }
 
-  if (student.idCardDocxPath) {
-    const docxPath = path.isAbsolute(student.idCardDocxPath)
-      ? student.idCardDocxPath
-      : path.join(__dirname, student.idCardDocxPath);
+  // Prefer prebuilt.idCardDocxPath (passed inline from enqueue) over student.idCardDocxPath (from DB)
+  const docxRelPath = (prebuilt && prebuilt.idCardDocxPath) || student.idCardDocxPath;
+  if (docxRelPath) {
+    const docxPath = path.isAbsolute(docxRelPath)
+      ? docxRelPath
+      : path.join(__dirname, docxRelPath);
     if (fs.existsSync(docxPath)) {
       const buf = fs.readFileSync(docxPath);
       files.push({
@@ -129,7 +131,7 @@ function buildFiles(student, prebuilt) {
         buffer: buf
       });
     } else {
-      console.error(`DOCX file not found: ${docxPath}`);
+      console.error(`[QUEUE] DOCX file not found: ${docxPath}`);
     }
   }
 

@@ -38,6 +38,19 @@ function rateLimiter(req, res, next) {
 }
 setInterval(() => { rateLimitMap.clear(); }, 120000); // cleanup every 2min
 
+// Admin passcode middleware — protects destructive endpoints
+function requireAdmin(req, res, next) {
+  const passcode = process.env.ADMIN_PASSCODE;
+  if (!passcode) {
+    return res.status(500).json({ error: 'Admin passcode not configured on server' });
+  }
+  const provided = req.headers['x-admin-passcode'];
+  if (!provided || provided !== passcode) {
+    return res.status(401).json({ error: 'Unauthorized: invalid or missing admin passcode' });
+  }
+  next();
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -194,10 +207,11 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
 
     // Background: wait for DOCX, then enqueue Drive upload
     promise.then(async result => {
-      if (result && result.docxPath) {
-        await store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+      const docxRelPath = result && result.docxPath ? `uploads/${path.basename(result.docxPath)}` : null;
+      if (docxRelPath) {
+        await store.update(studentId, { idCardDocxPath: docxRelPath });
       }
-      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
+      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg', idCardDocxPath: docxRelPath });
     }).catch(err => {
       console.error('[OVERRIDE] DOCX generation failed:', err.message);
       store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
@@ -333,10 +347,11 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
 
     // Background: wait for DOCX, then enqueue Drive upload
     promise.then(async result => {
-      if (result && result.docxPath) {
-        await store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+      const docxRelPath = result && result.docxPath ? `uploads/${path.basename(result.docxPath)}` : null;
+      if (docxRelPath) {
+        await store.update(studentId, { idCardDocxPath: docxRelPath });
       }
-      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
+      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg', idCardDocxPath: docxRelPath });
     }).catch(err => {
       console.error('DOCX generation failed:', err.message);
       store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
@@ -456,10 +471,11 @@ app.post('/api/bulk-students', rateLimiter, async (req, res) => {
 
     // Background: wait for DOCX, then enqueue Drive upload
     promise.then(async result => {
-      if (result && result.docxPath) {
-        await store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+      const docxRelPath = result && result.docxPath ? `uploads/${path.basename(result.docxPath)}` : null;
+      if (docxRelPath) {
+        await store.update(studentId, { idCardDocxPath: docxRelPath });
       }
-      uploadQueue.enqueue(studentId, { photo: photoBuffer, photoExt: ext });
+      uploadQueue.enqueue(studentId, { photo: photoBuffer, photoExt: ext, idCardDocxPath: docxRelPath });
     }).catch(err => {
       console.error('[BULK] DOCX generation failed:', err.message);
       store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
@@ -499,8 +515,8 @@ app.get('/api/students/:id/status', async (req, res) => {
   });
 });
 
-// Delete a student
-app.delete('/api/students/:id', async (req, res) => {
+// Delete a student (admin only)
+app.delete('/api/students/:id', rateLimiter, requireAdmin, async (req, res) => {
   const student = await store.find(req.params.id);
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
@@ -525,7 +541,7 @@ app.delete('/api/students/:id', async (req, res) => {
 });
 
 // Re-queue a failed/pending upload
-app.post('/api/students/:id/resync', async (req, res) => {
+app.post('/api/students/:id/resync', rateLimiter, async (req, res) => {
   const student = await store.find(req.params.id);
   if (!student) {
     return res.status(404).json({ error: 'Student not found' });
@@ -541,7 +557,7 @@ app.get('/api/queue', (req, res) => {
 });
 
 // Manual re-sync of a single student
-app.post('/api/save-to-drive', rateLimiter, async (req, res) => {
+app.post('/api/save-to-drive', rateLimiter, requireAdmin, async (req, res) => {
   const { studentId } = req.body;
   const student = await store.find(studentId);
   if (!student) {
@@ -553,7 +569,7 @@ app.post('/api/save-to-drive', rateLimiter, async (req, res) => {
 });
 
 // ── Reset endpoint — clears all local + Drive data ──────────────────
-app.post('/api/reset', rateLimiter, async (req, res) => {
+app.post('/api/reset', rateLimiter, requireAdmin, async (req, res) => {
   try {
     console.log('[RESET] Starting full data reset...');
 
