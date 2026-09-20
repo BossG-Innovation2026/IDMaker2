@@ -14,7 +14,8 @@ async function find(id) {
 }
 
 async function add(student) {
-  return Student.create(student);
+  const doc = await Student.create(student);
+  return doc.toObject();
 }
 
 async function update(id, patch) {

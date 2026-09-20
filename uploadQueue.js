@@ -14,43 +14,9 @@ const queuedIds = new Set();
 let active = 0;
 let idleTimer = null;
 
-// ── Persisted queue helpers ──────────────────────────────────────────
-const QUEUE_FILE = path.join(__dirname, 'data', 'upload-queue.json');
-
-function persistQueue() {
-  try {
-    const dir = path.dirname(QUEUE_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    // Only persist IDs — never serialize large file buffers to disk
-    const ids = queue.map(j => (typeof j === 'string' ? j : j.id));
-    const data = { queue: ids, queuedIds: [...queuedIds] };
-    fs.writeFileSync(QUEUE_FILE, JSON.stringify(data), 'utf8');
-  } catch (e) {
-    console.error('[QUEUE] Failed to persist queue:', e.message);
-  }
-}
-
+// ── Queue helpers (MongoDB-backed, no disk persistence) ──────────────
 function loadQueue() {
-  try {
-    if (fs.existsSync(QUEUE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf8'));
-      if (Array.isArray(data.queue)) {
-        for (const id of data.queue) {
-          if (!queuedIds.has(id)) {
-            queue.push(id);
-            queuedIds.add(id);
-          }
-        }
-        console.log(`[QUEUE] Restored ${queue.length} pending jobs from disk`);
-      }
-    }
-  } catch (e) {
-    console.error('[QUEUE] Failed to load persisted queue:', e.message);
-  }
-}
-
-function clearPersisted() {
-  try { fs.unlinkSync(QUEUE_FILE); } catch (_) {}
+  // No-op: queue is rebuilt from MongoDB on startup
 }
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -67,7 +33,6 @@ function enqueue(studentId, prebuiltFiles) {
   } else {
     queue.push({ id: studentId });
   }
-  persistQueue();
   pump();
 }
 
@@ -76,7 +41,6 @@ function pump() {
     const job = queue.shift();
     queuedIds.delete(typeof job === 'string' ? job : job.id);
     active++;
-    persistQueue();
     processJob(job)
       .catch(err => console.error('[QUEUE] Job crashed:', err.message))
       .finally(() => { active--; pump(); });

@@ -193,9 +193,9 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
     const { queueId, position, promise } = docxQueue.enqueueDOCX({ ...student, id: studentId }, photoBuf);
 
     // Background: wait for DOCX, then enqueue Drive upload
-    promise.then(result => {
+    promise.then(async result => {
       if (result && result.docxPath) {
-        store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+        await store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
       }
       uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
     }).catch(err => {
@@ -332,9 +332,9 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
     const { queueId, position, promise } = docxQueue.enqueueDOCX({ ...student, id: studentId }, photoBuf);
 
     // Background: wait for DOCX, then enqueue Drive upload
-    promise.then(result => {
+    promise.then(async result => {
       if (result && result.docxPath) {
-        store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+        await store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
       }
       uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg' });
     }).catch(err => {
@@ -455,9 +455,9 @@ app.post('/api/bulk-students', rateLimiter, async (req, res) => {
     const { queueId, position, promise } = docxQueue.enqueueDOCX({ ...student, id: studentId }, photoBuffer);
 
     // Background: wait for DOCX, then enqueue Drive upload
-    promise.then(result => {
+    promise.then(async result => {
       if (result && result.docxPath) {
-        store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
+        await store.update(studentId, { idCardDocxPath: `uploads/${path.basename(result.docxPath)}` });
       }
       uploadQueue.enqueue(studentId, { photo: photoBuffer, photoExt: ext });
     }).catch(err => {
@@ -618,15 +618,28 @@ async function start() {
   // Load persisted queue from disk
   uploadQueue.loadQueue();
 
-  // Recover unfinished uploads (skip already-uploaded)
-  const allStudents = await store.all();
-  const pending = allStudents.filter(s => s.uploadStatus !== 'uploaded' && s.uploadStatus !== 'uploading');
-  if (pending.length > 0) {
-    console.log(`↻ Re-queuing ${pending.length} unfinished upload(s)`);
-    for (const s of pending) {
-      await store.update(s._id, { uploadStatus: 'pending' });
-      uploadQueue.enqueue(String(s._id));
+  // Recover unfinished uploads (skip if photo missing on disk)
+  try {
+    const allStudents = await store.all();
+    const pending = allStudents.filter(s => s.uploadStatus !== 'uploaded' && s.uploadStatus !== 'uploading');
+    if (pending.length > 0) {
+      const uploadsDir = path.join(__dirname, 'uploads');
+      let requeued = 0;
+      for (const s of pending) {
+        const photoExists = s.photoPath && fs.existsSync(path.join(uploadsDir, s.photoPath));
+        if (photoExists) {
+          await store.update(s._id, { uploadStatus: 'pending' });
+          uploadQueue.enqueue(String(s._id));
+          requeued++;
+        } else {
+          console.log(`[STARTUP] Skipping ${s.firstName}_${s.lastName} — photo missing on disk`);
+          await store.update(s._id, { uploadStatus: 'failed', uploadError: 'Photo lost — re-submit required' });
+        }
+      }
+      console.log(`↻ Re-queuing ${requeued}/${pending.length} unfinished upload(s)`);
     }
+  } catch (err) {
+    console.error('[STARTUP] Re-queue recovery failed:', err.message);
   }
 }
 
