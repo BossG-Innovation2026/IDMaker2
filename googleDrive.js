@@ -261,42 +261,49 @@ class GoogleDriveService {
                 { header: 'Middle Name', key: 'middleName', width: 18 },
                 { header: 'M.I.', key: 'mi', width: 8 },
                 { header: 'Sex', key: 'sex', width: 8 },
+                { header: 'Section', key: 'section', width: 15 },
                 { header: 'Birthday', key: 'birthday', width: 15 },
-                { header: 'Address', key: 'address', width: 35 },
-                { header: 'Parent/Guardian', key: 'parentName', width: 22 },
+                { header: 'Address', key: 'address', width: 30 },
+                { header: 'Parent/Guardian', key: 'parentName', width: 20 },
                 { header: 'Contact', key: 'contactNumber', width: 15 },
+                { header: 'Status', key: 'uploadStatus', width: 12 },
                 { header: 'Photo Link', key: 'photoLink', width: 25 },
                 { header: 'ID Card Link', key: 'idCardLink', width: 25 },
                 { header: 'Created', key: 'createdAt', width: 22 },
                 { header: 'Updated', key: 'updatedAt', width: 22 },
-                { header: 'Entry Method', key: 'entryMethod', width: 15 }
+                { header: 'Entry Method', key: 'entryMethod', width: 15 },
+                { header: 'Overridden', key: 'overridden', width: 20 }
             ];
 
             worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
             worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
 
-            students.forEach((s, i) => {
+            let num = 1;
+            students.forEach((s) => {
                 const mi = s.middleName ? s.middleName.charAt(0) + '.' : '';
                 const photoLink = s.driveFiles?.photo?.fileLink || '';
                 const idCardLink = s.driveFiles?.idCard?.fileLink || '';
-                
+
                 worksheet.addRow({
-                    num: i + 1,
+                    num: num++,
                     lrn: s.lrn,
                     lastName: s.lastName,
                     firstName: s.firstName,
                     middleName: s.middleName || '',
                     mi: mi,
                     sex: s.sex || '',
+                    section: s.section,
                     birthday: new Date(s.birthday).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
                     address: s.address,
                     parentName: s.parentName,
                     contactNumber: s.contactNumber,
+                    uploadStatus: s.uploadStatus || '',
                     photoLink: photoLink,
                     idCardLink: idCardLink,
                     createdAt: s.createdAt ? new Date(s.createdAt).toLocaleString() : '',
                     updatedAt: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : '',
-                    entryMethod: s.entryMethod || ''
+                    entryMethod: s.entryMethod || '',
+                    overridden: ''
                 });
             });
 
