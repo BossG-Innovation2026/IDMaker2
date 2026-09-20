@@ -9,3 +9,27 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: TZ
+        value: Etc/GMT-8
+      - key: MONGO_URI
+        sync: false
+      - key: ADMIN_PASSCODE
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false
+      - key: GOOGLE_PROJECT_ID
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY_ID
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_AUTH_URI
+        sync: false
+      - key: GOOGLE_TOKEN_URI
+        sync: false
