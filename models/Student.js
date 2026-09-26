@@ -14,6 +14,8 @@ const studentSchema = new mongoose.Schema({
   entryMethod:   { type: String, default: 'Individual' },
   photoPath:     { type: String, default: '' },
   photoMime:     { type: String, default: '' },
+  photoOriginalPath: { type: String, default: '' },
+  photoOriginalMime: { type: String, default: '' },
   photoSource:   { type: String, default: '' },
   uploadStatus:  { type: String, default: 'pending' },
   uploadError:   { type: String, default: null },

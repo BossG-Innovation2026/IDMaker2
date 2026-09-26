@@ -5,6 +5,8 @@ let videoStream = null;
 let faceDetectionInterval = null;
 let modelsLoaded = false;
 let capturedPhotoData = null;
+let originalPhotoFile = null;   // committed original (full frame / raw file) — sent as photoOriginal
+let pendingOriginalFile = null; // gallery file awaiting white-background check
 let allChecksPassed = false;
 const REQUIRE_WHITE_BG = true;
 let lastWhiteness = null; // Track whiteness of last captured photo
@@ -103,7 +105,10 @@ function setupEventListeners() {
             const reader = new FileReader();
             reader.onloadend = () => {
                 const img = new Image();
-                img.onload = () => processUploadedImage(img);
+                img.onload = () => {
+                    pendingOriginalFile = file;
+                    processUploadedImage(img);
+                };
                 img.src = reader.result;
             };
             reader.readAsDataURL(file);
@@ -724,6 +729,10 @@ async function processUploadedImage(source) {
 
     console.log('[UPLOAD] Background passed. Continuing to face crop.');
 
+    // Background passed — commit the raw original file for the Drive full-size upload
+    originalPhotoFile = pendingOriginalFile;
+    pendingOriginalFile = null;
+
     // Step 2: Face detection
     let faceRegion = null;
     if (modelsLoaded) {
@@ -845,6 +854,8 @@ function captureWithCanvas(video) {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
     capturedPhotoData = canvas.toDataURL('image/jpeg', 0.92);
+    // Keep the full uncropped frame as the original for the Drive full-size upload
+    originalPhotoFile = dataURLtoFile(capturedPhotoData, 'photo_full.jpg');
     processCapturedImage(canvas);
 }
 
@@ -1002,6 +1013,7 @@ function approvePhoto() {
 
 function rejectPhoto() {
     capturedPhotoData = null;
+    originalPhotoFile = null;
     document.getElementById('previewModal').classList.add('hidden');
     openCameraModal();
 }
@@ -1156,6 +1168,7 @@ async function confirmOverride() {
     formData.append('parentName', document.getElementById('parentName').value);
     formData.append('contactNumber', document.getElementById('contactNumber').value);
     formData.append('photo', selectedFile);
+    if (originalPhotoFile) formData.append('photoOriginal', originalPhotoFile);
     formData.append('existingId', pendingOverrideData.existingId);
     
     try {
@@ -1295,6 +1308,7 @@ async function submitNewStudent() {
     formData.append('parentName', document.getElementById('parentName').value);
     formData.append('contactNumber', document.getElementById('contactNumber').value);
     formData.append('photo', selectedFile);
+    if (originalPhotoFile) formData.append('photoOriginal', originalPhotoFile);
     
     try {
         const response = await fetch(`${API_URL}/api/students`, {

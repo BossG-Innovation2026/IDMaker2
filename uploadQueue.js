@@ -116,6 +116,28 @@ function buildFiles(student, prebuilt) {
     });
   }
 
+  // Full-size original photo (individual camera/gallery submissions only)
+  if (prebuilt && prebuilt.photoFull) {
+    files.push({
+      key: 'photoFull',
+      name: `${base}_PIC_FULL${prebuilt.photoFullExt || '.jpg'}`,
+      mimeType: prebuilt.photoFullMime || 'image/jpeg',
+      buffer: prebuilt.photoFull
+    });
+  } else if (student.photoOriginalPath) {
+    const fullPhotoPath = path.join(__dirname, 'uploads', student.photoOriginalPath);
+    if (fs.existsSync(fullPhotoPath)) {
+      files.push({
+        key: 'photoFull',
+        name: `${base}_PIC_FULL${path.extname(student.photoOriginalPath) || '.jpg'}`,
+        mimeType: student.photoOriginalMime || 'image/jpeg',
+        buffer: fs.readFileSync(fullPhotoPath)
+      });
+    } else {
+      console.error(`Full-size photo file not found: ${fullPhotoPath}`);
+    }
+  }
+
   // Prefer prebuilt.idCardDocxPath (passed inline from enqueue) over student.idCardDocxPath (from DB)
   const docxRelPath = (prebuilt && prebuilt.idCardDocxPath) || student.idCardDocxPath;
   if (docxRelPath) {
@@ -180,6 +202,7 @@ async function processJob(job) {
 
       const fileLinks = {
         photo: results.photo?.fileLink || null,
+        photoFull: results.photoFull?.fileLink || null,
         idCard: results.idCard?.fileLink || null,
         idCardDocx: results.idCardDocx?.fileLink || null
       };
@@ -218,6 +241,10 @@ function cleanupLocalFiles(student) {
       const p = path.join(uploadsDir, student.photoPath);
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
+    if (student.photoOriginalPath) {
+      const p = path.join(uploadsDir, student.photoOriginalPath);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
     if (student.idCardDocxPath) {
       const p = path.join(uploadsDir, path.basename(student.idCardDocxPath));
       if (fs.existsSync(p)) fs.unlinkSync(p);
@@ -235,4 +262,4 @@ function stats() {
   return { queued: queue.length, active, concurrency: CONCURRENCY };
 }
 
-module.exports = { enqueue, stats, loadQueue };
+module.exports = { enqueue, stats, loadQueue, buildFiles };

@@ -13,6 +13,7 @@ const overrideSchema = new mongoose.Schema({
   contactNumber: { type: String, default: '' },
   entryMethod:   { type: String, default: '' },
   photoPath:     { type: String, default: '' },
+  photoOriginalPath: { type: String, default: '' },
   uploadStatus:  { type: String, default: '' },
   driveUploaded: { type: Boolean, default: false },
   overriddenAt:  { type: Date, default: Date.now }

@@ -377,7 +377,7 @@ class GoogleDriveService {
         const deleted = [];
         const files = student.driveFiles || {};
 
-        for (const key of ['photo', 'idCard', 'idCardDocx']) {
+        for (const key of ['photo', 'photoFull', 'idCard', 'idCardDocx']) {
             if (files[key] && files[key].fileId) {
                 const ok = await this.deleteDriveFile(files[key].fileId);
                 if (ok) deleted.push(key);

@@ -77,7 +77,40 @@ const storage = multer.diskStorage({
     cb(null, `${uuidv4()}${ext}`);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
+
+// Both endpoints accept the cropped photo plus the optional full-size original
+const studentUpload = upload.fields([
+  { name: 'photo', maxCount: 1 },
+  { name: 'photoOriginal', maxCount: 1 }
+]);
+
+function pickFiles(req) {
+  const photo = (req.files && req.files.photo && req.files.photo[0]) || null;
+  const original = (req.files && req.files.photoOriginal && req.files.photoOriginal[0]) || null;
+  return { photo, original };
+}
+
+// Queue the Drive upload: cropped photo (as today) + optional full-size original
+function enqueueDriveUpload(studentId, student, photoBuf, docxRelPath) {
+  let photoFullBuf = null;
+  if (student.photoOriginalPath) {
+    const p = path.join(__dirname, 'uploads', student.photoOriginalPath);
+    if (fs.existsSync(p)) {
+      photoFullBuf = fs.readFileSync(p);
+    } else {
+      console.warn(`[UPLOAD] Full-size original missing on disk: ${p}`);
+    }
+  }
+  uploadQueue.enqueue(studentId, {
+    photo: photoBuf,
+    photoExt: path.extname(student.photoPath) || '.jpg',
+    photoFull: photoFullBuf,
+    photoFullExt: photoFullBuf ? (path.extname(student.photoOriginalPath) || '.jpg') : null,
+    photoFullMime: student.photoOriginalMime || 'image/jpeg',
+    idCardDocxPath: docxRelPath
+  });
+}
 
 // Predefined classes list
 const classes = [
@@ -159,7 +192,7 @@ app.get('/api/students/check-duplicate', async (req, res) => {
 });
 
 // Override endpoint — delete old + create new atomically
-app.post('/api/students/override', rateLimiter, upload.single('photo'), async (req, res) => {
+app.post('/api/students/override', rateLimiter, studentUpload, async (req, res) => {
   try {
     const {
       firstName, middleName, lastName, sex, birthday,
@@ -173,7 +206,8 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
     if (parentWords.length < 2) {
       return res.status(400).json({ error: 'Parent/Guardian name must be at least 2 words' });
     }
-    if (!req.file) {
+    const { photo: photoFile, original: originalFile } = pickFiles(req);
+    if (!photoFile) {
       return res.status(400).json({ error: 'Photo is required' });
     }
 
@@ -188,8 +222,10 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
       firstName, middleName: middleName || '', lastName, sex, birthday,
       lrn, section, address, parentName, contactNumber,
       entryMethod: 'Individual',
-      photoPath: req.file.filename,
-      photoMime: req.file.mimetype,
+      photoPath: photoFile.filename,
+      photoMime: photoFile.mimetype,
+      photoOriginalPath: originalFile ? originalFile.filename : '',
+      photoOriginalMime: originalFile ? originalFile.mimetype : '',
       uploadStatus: 'pending',
       uploadError: null,
       driveUploaded: false,
@@ -211,7 +247,7 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
       if (docxRelPath) {
         await store.update(studentId, { idCardDocxPath: docxRelPath });
       }
-      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg', idCardDocxPath: docxRelPath });
+      enqueueDriveUpload(studentId, student, photoBuf, docxRelPath);
     }).catch(err => {
       console.error('[OVERRIDE] DOCX generation failed:', err.message);
       store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
@@ -236,6 +272,7 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
     }
 
     if (existing.photoPath) deleteFile(existing.photoPath, 'photo');
+    if (existing.photoOriginalPath) deleteFile(existing.photoOriginalPath, 'photoOriginal');
     if (existing.idCardDocxPath) deleteFile(existing.idCardDocxPath, 'DOCX');
 
     // Log the old record as overridden BEFORE removing it
@@ -268,7 +305,7 @@ app.post('/api/students/override', rateLimiter, upload.single('photo'), async (r
 });
 
 // Submit student data with photo
-app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) => {
+app.post('/api/students', rateLimiter, studentUpload, async (req, res) => {
   try {
     const {
       firstName,
@@ -313,7 +350,8 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
       });
     }
 
-    if (!req.file) {
+    const { photo: photoFile, original: originalFile } = pickFiles(req);
+    if (!photoFile) {
       return res.status(400).json({ error: 'Photo is required' });
     }
 
@@ -329,8 +367,10 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
       parentName,
       contactNumber,
       entryMethod: 'Individual',
-      photoPath: req.file.filename,
-      photoMime: req.file.mimetype,
+      photoPath: photoFile.filename,
+      photoMime: photoFile.mimetype,
+      photoOriginalPath: originalFile ? originalFile.filename : '',
+      photoOriginalMime: originalFile ? originalFile.mimetype : '',
       uploadStatus: 'pending',
       uploadError: null,
       driveUploaded: false,
@@ -351,7 +391,7 @@ app.post('/api/students', rateLimiter, upload.single('photo'), async (req, res) 
       if (docxRelPath) {
         await store.update(studentId, { idCardDocxPath: docxRelPath });
       }
-      uploadQueue.enqueue(studentId, { photo: photoBuf, photoExt: path.extname(student.photoPath) || '.jpg', idCardDocxPath: docxRelPath });
+      enqueueDriveUpload(studentId, student, photoBuf, docxRelPath);
     }).catch(err => {
       console.error('DOCX generation failed:', err.message);
       store.update(studentId, { uploadStatus: 'failed', uploadError: err.message });
@@ -526,6 +566,10 @@ app.delete('/api/students/:id', rateLimiter, requireAdmin, async (req, res) => {
   try {
     if (student.photoPath) {
       const p = path.join(uploadsDir, student.photoPath);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+    if (student.photoOriginalPath) {
+      const p = path.join(uploadsDir, student.photoOriginalPath);
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
     if (student.idCardDocxPath) {
